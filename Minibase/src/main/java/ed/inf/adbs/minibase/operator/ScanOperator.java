@@ -13,12 +13,6 @@ public class ScanOperator extends Operator{
     private Scanner relationScanner;
     private final List<String> relationSchema;
 
-    /**
-     * Initialize the file reader, make connection to {@link DatabaseCatalog}.
-     * Use the relation name to load corresponding schema.
-     * Use the terms in the relational atom to build the variable mask
-     * @param baseQueryAtom a relational atom in query body, providing information like relation name and variable mask.
-     */
     public ScanOperator(RelationalAtom baseQueryAtom) {
         for (Term term : baseQueryAtom.getTerms()) {
             if (term instanceof Variable)
@@ -26,7 +20,6 @@ public class ScanOperator extends Operator{
             else
                 this.variableMask.add(null);
         }
-
         this.relationName = baseQueryAtom.getName();
         DatabaseCatalog dbc = DatabaseCatalog.getInstance();
         this.relationSchema = dbc.getSchema(relationName);

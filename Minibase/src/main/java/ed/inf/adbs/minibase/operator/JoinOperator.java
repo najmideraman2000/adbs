@@ -6,55 +6,21 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 
-/**
- * Apply JOIN operation on the output tuple sets of two child operators.
- * The implicit inner join conditions (i.e. the two join relations contain same variables)
- *      will be processed automatically in this class.
- * Other explicit join conditions (e.g. some comparison between two different variables in the two join relations separately)
- *      are provided by {@link ComparisonAtom} in query body, which is an input parameter in the constructor.
- * All these join conditions (either implicit or explicit) will be converted into {@link JoinCondition} instances,
- *      which use {@link JoinCondition#check(Tuple, Tuple)} to check whether a combination of left and right tuple satisfies the requirement.
- */
 public class JoinOperator extends Operator {
-
-    private Operator leftChild;
-    private Operator rightChild;
-
-    private List<JoinCondition> conditions = new ArrayList<>();
-
-    private HashMap<Integer, Integer> joinConditionIndices = new HashMap<>();
-    // a map from variable index in left tuples to index in right tuples that represents the same variable
-    // this is used for inner join checks, duplication columns will be removed by referring to this map.
-
-    private List<Integer> rightDuplicateColumns = new ArrayList<>();
-    // the columns in right child to be removed (due to inner join / duplicates with columns in left child)
-
+    private final Operator leftChild;
+    private final Operator rightChild;
+    private final HashMap<Integer, Integer> joinConditionIndices = new HashMap<>();
+    private final List<Integer> rightDuplicateColumns = new ArrayList<>();
     private Tuple leftTuple = null;
-    // the current being checked output tuple of left child
+    private final List<ComparisonAtom> comparisonAtomList;
+    private final List<String> leftVariableMask;
+    private final List<String> rightVariableMask;
 
-    /**
-     * Initialise the operator:
-     *      (1) Convert the input {@link ComparisonAtom} list into {@link JoinCondition} list,
-     *          which implements specific methods for checking whether a tuple satisfy a certain condition.
-     *      (2) Check the inner join conditions, i.e. find the variables which appear in both left and right tuples,
-     *          interpret these conditions as {@link SelectOperator} instances.
-     *      (3) Update the variable mask, the right child tuples will be concatenated to
-     *          the left child tuples (with the inner join duplicated columns be removed)
-     * @param leftChild left child operator.
-     * @param rightChild right child operator.
-     * @param comparisonAtoms the explicit join conditions provided by {@link ComparisonAtom} in query body.
-     */
     public JoinOperator(Operator leftChild, Operator rightChild, List<ComparisonAtom> comparisonAtoms) {
         this.leftChild = leftChild;
-        List<String> leftVariableMask = leftChild.getVariableMask();
+        leftVariableMask = leftChild.getVariableMask();
         this.rightChild = rightChild;
-        List<String> rightVariableMask = rightChild.getVariableMask();
-
-        for (ComparisonAtom compAtom : comparisonAtoms)
-            this.conditions.add(new JoinCondition(compAtom, leftVariableMask, rightVariableMask));
-
-        // Find if the right relation contains some variables that also appear in left relation.
-        // These identical variable pairs indicate some inner join conditions.
+        rightVariableMask = rightChild.getVariableMask();
         for (String leftVar : leftVariableMask) {
             this.variableMask.add(leftVar);
             if (rightVariableMask.contains(leftVar)) {
@@ -71,11 +37,9 @@ public class JoinOperator extends Operator {
                     this.variableMask.add(rightVar);
             }
         }
+        this.comparisonAtomList = comparisonAtoms;
     }
 
-    /**
-     * Reset the states of both child operators.
-     */
     @Override
     public void reset() {
         this.leftChild.reset();
@@ -83,25 +47,16 @@ public class JoinOperator extends Operator {
         this.leftTuple = null;
     }
 
-    /**
-     * Get the next joined tuple from output of left and right child operators.
-     * Implements an outer loop on left child tuples (and use {@code this.leftTuple} to track the being checked left tuple).
-     * Implements an inner loop on right child tuples.
-     * @return the next joined tuple that satisfies the join conditions.
-     */
     @Override
     public Tuple getNextTuple() {
-        // the leftTuple is stored in the instance, otherwise each left tuple can only be joined with at most one right tuple
         if (this.leftTuple == null)
             this.leftTuple = this.leftChild.getNextTuple();
 
         while (this.leftTuple != null) {
-            // Fix a tuple in outer loop, then iterate over the tuples in inner loop
             Tuple rightTuple = this.rightChild.getNextTuple();
-            while (rightTuple != null) {
 
+            while (rightTuple != null) {
                 boolean pass = true;
-                // check the inner join conditions provided by same variable names in two query atoms
                 for (Integer leftIndex : this.joinConditionIndices.keySet()) {
                     int rightIndex = this.joinConditionIndices.get(leftIndex);
                     if (!this.leftTuple.getTerms().get(leftIndex).equals(rightTuple.getTerms().get(rightIndex))) {
@@ -109,17 +64,11 @@ public class JoinOperator extends Operator {
                         break;
                     }
                 }
-                // check the join conditions provided by extra ComparisonAtom, and involves different variables
                 if (pass) {
-                    for (JoinCondition condition : this.conditions) {
-                        if (!condition.check(this.leftTuple, rightTuple)) {
-                            pass = false;
-                            break;
-                        }
+                    if (!check(this.leftTuple, rightTuple)) {
+                        pass = false;
                     }
                 }
-
-                // if all conditions are satisfied, construct a new Tuple instance as join result
                 if (pass) {
                     List<Term> joinTermList = new ArrayList<>();
                     // the join result contains all columns in left tuple, and the non-duplicate columns in right tuple
@@ -132,15 +81,70 @@ public class JoinOperator extends Operator {
                     }
                     return new Tuple("Join", joinTermList);
                 }
-
-                // otherwise, check the next right tuple
                 rightTuple = this.rightChild.getNextTuple();
             }
-            // reset the right child operator, so the inner loop will be restarted from beginning
             this.rightChild.reset();
-            // move to the next outer loop tuple
             this.leftTuple = this.leftChild.getNextTuple();
         }
         return null;
+    }
+
+    public boolean check(Tuple leftTuple, Tuple rightTuple) {
+        for (ComparisonAtom cAtom : this.comparisonAtomList) {
+            String op = cAtom.getOp().toString();
+            int operand1Idx = 0;
+            int operand2Idx = 0;
+            boolean reverseOrder = false;
+            if ( leftVariableMask.contains(((Variable) cAtom.getTerm1()).getName()) ) {
+                operand1Idx = leftVariableMask.indexOf(((Variable) cAtom.getTerm1()).getName());
+                operand2Idx = rightVariableMask.indexOf(((Variable) cAtom.getTerm2()).getName());
+            } else {
+                reverseOrder = true;
+                operand1Idx = rightVariableMask.indexOf(((Variable) cAtom.getTerm1()).getName());
+                operand2Idx = leftVariableMask.indexOf(((Variable) cAtom.getTerm2()).getName());
+            }
+
+            Term operand1;
+            Term operand2;
+            if (!reverseOrder) {
+                operand1 = leftTuple.getTerms().get(operand1Idx);
+                operand2 = rightTuple.getTerms().get(operand2Idx);
+            } else {
+                operand1 = rightTuple.getTerms().get(operand1Idx);
+                operand2 = leftTuple.getTerms().get(operand2Idx);
+            }
+
+            boolean pass;
+            switch (op) {
+                case "=":
+                    pass = operand1.toString().equals(operand2.toString());
+                    break;
+                case "!=":
+                    pass = !operand1.toString().equals(operand2.toString());
+                    break;
+                case ">":
+                    if (operand1 instanceof IntegerConstant) pass = ((IntegerConstant) operand1).getValue() > ((IntegerConstant) operand2).getValue();
+                    else pass = ((StringConstant) operand1).getValue().compareTo(((StringConstant) operand2).getValue()) > 0;
+                    break;
+                case ">=":
+                    if (operand1 instanceof IntegerConstant) pass = ((IntegerConstant) operand1).getValue() >= ((IntegerConstant) operand2).getValue();
+                    else pass = ((StringConstant) operand1).getValue().compareTo(((StringConstant) operand2).getValue()) >= 0;
+                    break;
+                case "<":
+                    if (operand1 instanceof IntegerConstant) pass = ((IntegerConstant) operand1).getValue() < ((IntegerConstant) operand2).getValue();
+                    else pass = ((StringConstant) operand1).getValue().compareTo(((StringConstant) operand2).getValue()) < 0;
+                    break;
+                case "<=":
+                    if (operand1 instanceof IntegerConstant) pass = ((IntegerConstant) operand1).getValue() <= ((IntegerConstant) operand2).getValue();
+                    else pass = ((StringConstant) operand1).getValue().compareTo(((StringConstant) operand2).getValue()) <= 0;
+                    break;
+                default:
+                    System.out.println("!!!! None of the if-branches is evoked in the Selection Operator !!!!");
+                    pass = false;
+                    break;
+            }
+            if (!pass) return false;
+        }
+        return true;
     }
 }

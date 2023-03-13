@@ -33,15 +33,9 @@ public class Minibase {
         try {
             DatabaseCatalog dbc = DatabaseCatalog.getInstance();
             dbc.init(databaseDir);
-
             Query query = QueryParser.parse(Paths.get(inputFile));
-
             Operator rootOperator = buildQueryPlan(query);
-            if (rootOperator != null) {
-                rootOperator.dump(outputFile);
-            } else {
-                System.out.println("-- Empty query --");
-            }
+            rootOperator.dump(outputFile);
         } catch (Exception e) {
             System.err.println("Exception occurred during parsing");
             e.printStackTrace();
@@ -51,8 +45,8 @@ public class Minibase {
     private static Operator buildQueryPlan(Query query) {
         List<RelationalAtom> relationalBody = new ArrayList<>();
         List<ComparisonAtom> comparisonBody = new ArrayList<>();
-        List<Term> fafaf = new ArrayList<>(query.getHead().getVariables());
-        RelationalAtom headReal = new RelationalAtom(query.getHead().getName(), fafaf);
+        List<Term> headVars = new ArrayList<>(query.getHead().getVariables());
+        RelationalAtom headReal = new RelationalAtom(query.getHead().getName(), headVars);
 
         List<String> allVar = new ArrayList<>();
         for (Atom atom : query.getBody()) {
@@ -105,16 +99,13 @@ public class Minibase {
                     selectCompAtomList.add(cAtom);
             subtree = new SelectOperator(subtree, selectCompAtomList);
 
+            // Join operation
             List<String> mergedVariables = new ArrayList<>();
             mergedVariables.addAll(previousVariables);
             mergedVariables.addAll(subtreeVariables);
             if (rootOperator == null) {
-                // if this is the first branch of query plan tree, record it as root
                 rootOperator = subtree;
             } else {
-                // if before this branch starting from the current RelationalAtom,
-                // there already exists a subtree at left side,
-                // apply JoinOperator on their roots.
                 List<ComparisonAtom> joinCompAtomList = new ArrayList<>();
                 for (ComparisonAtom cAtom : comparisonBody) {
                     if (!variableAllAppeared(cAtom, previousVariables) &&
@@ -124,10 +115,9 @@ public class Minibase {
                 }
                 rootOperator = new JoinOperator(rootOperator, subtree, joinCompAtomList);
             }
-
-            // update variable list after two subtrees are joined
             previousVariables = mergedVariables;
         }
+        // Project operation
         rootOperator = new ProjectOperator(rootOperator, headReal);
 
         return rootOperator;
@@ -178,5 +168,4 @@ public class Minibase {
             e.printStackTrace();
         }
     }
-
 }

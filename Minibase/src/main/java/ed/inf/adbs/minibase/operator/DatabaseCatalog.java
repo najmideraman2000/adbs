@@ -8,6 +8,7 @@ public class DatabaseCatalog {
     public static DatabaseCatalog instance;
     private String databaseDir;
     Map<String, List<String>> relationSchemaMap = new HashMap<>();
+
     public static DatabaseCatalog getInstance(){
         if (instance == null)
             instance = new DatabaseCatalog();
@@ -25,7 +26,6 @@ public class DatabaseCatalog {
                 this.relationSchemaMap.put(line.get(0), line.subList(1, line.size()));
             }
             scanner.close();
-//            System.out.println(this.relationSchemaMap.get("R"));
         } catch (FileNotFoundException e) {
             System.out.println("Schema file not found at : " + schema_path);
             e.printStackTrace();
