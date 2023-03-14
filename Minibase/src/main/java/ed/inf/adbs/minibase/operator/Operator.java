@@ -5,7 +5,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 public abstract class Operator {
-    protected List<String> variableMask = new ArrayList<>();
+    protected List<String> varsName = new ArrayList<>();
 
     public void dump(String outputFile) {
         try {
@@ -17,14 +17,12 @@ public abstract class Operator {
             boolean isFirstLine = true;
             Tuple nextTuple = this.getNextTuple();
             while (nextTuple != null) {
-                if (writer == null) {
+                if (isFirstLine) {
+                    assert writer != null;
+                    writer.print(nextTuple);
+                    isFirstLine = false;
                 } else {
-                    if (isFirstLine) {
-                        writer.print(nextTuple.toString());
-                        isFirstLine = false;
-                    } else {
-                        writer.print("\n" + nextTuple.toString());
-                    }
+                    writer.print("\n" + nextTuple);
                 }
                 nextTuple = this.getNextTuple();
             }
@@ -41,7 +39,7 @@ public abstract class Operator {
 
     public abstract Tuple getNextTuple();
 
-    public List<String> getVariableMask() {
-        return this.variableMask;
+    public List<String> getVarsName() {
+        return this.varsName;
     }
 }

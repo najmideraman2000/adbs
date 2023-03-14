@@ -10,44 +10,42 @@ import java.util.Scanner;
 
 public class ScanOperator extends Operator{
     private final String relationName;
-    private Scanner relationScanner;
-    private final List<String> relationSchema;
+    private Scanner scanner;
+    private final List<String> schema;
 
-    public ScanOperator(RelationalAtom baseQueryAtom) {
-        for (Term term : baseQueryAtom.getTerms()) {
-            if (term instanceof Variable)
-                this.variableMask.add(((Variable) term).getName());
-            else
-                this.variableMask.add(null);
+    public ScanOperator(RelationalAtom atom) {
+        for (Term term : atom.getTerms()) {
+            if (term instanceof Variable) this.varsName.add(((Variable) term).getName());
+            else this.varsName.add(null);
         }
-        this.relationName = baseQueryAtom.getName();
-        DatabaseCatalog dbc = DatabaseCatalog.getInstance();
-        this.relationSchema = dbc.getSchema(relationName);
+        this.relationName = atom.getName();
+        DatabaseCatalog dbCat = DatabaseCatalog.getInstance();
+        this.schema = dbCat.getSchema(relationName);
         this.reset();
     }
 
     @Override
     public void reset() {
-        DatabaseCatalog dbc = DatabaseCatalog.getInstance();
+        DatabaseCatalog dbCat = DatabaseCatalog.getInstance();
         try {
-            this.relationScanner = new Scanner(new File(dbc.getRelationPath(relationName)));
+            this.scanner = new Scanner(new File(dbCat.getRelationPath(relationName)));
         } catch (FileNotFoundException e) {
-            System.out.println("Relation data file not found: " + dbc.getRelationPath(relationName));
+            System.out.println("Relation data file not found: " + dbCat.getRelationPath(relationName));
             e.printStackTrace();
         }
     }
 
     @Override
     public Tuple getNextTuple() {
-        if (this.relationScanner.hasNextLine()) {
-            String line = this.relationScanner.nextLine();
-            String[] raw_data = line.split("[^a-zA-Z0-9]+");
+        if (this.scanner.hasNextLine()) {
+            String line = this.scanner.nextLine();
+            String[] rawData = line.split("[^a-zA-Z0-9]+");
             ArrayList<Term> terms = new ArrayList<>();
-            for (int i = 0; i < raw_data.length; i++) {
-                if (this.relationSchema.get(i).equals("int")) {
-                    terms.add(new IntegerConstant(Integer.parseInt(raw_data[i])));
+            for (int i = 0; i < rawData.length; i++) {
+                if (this.schema.get(i).equals("int")) {
+                    terms.add(new IntegerConstant(Integer.parseInt(rawData[i])));
                 } else {
-                    terms.add(new StringConstant(raw_data[i]));
+                    terms.add(new StringConstant(rawData[i]));
                 }
             }
             return new Tuple(this.relationName, terms);

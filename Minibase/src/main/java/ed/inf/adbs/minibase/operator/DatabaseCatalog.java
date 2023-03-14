@@ -6,8 +6,8 @@ import java.util.*;
 
 public class DatabaseCatalog {
     public static DatabaseCatalog instance;
-    private String databaseDir;
-    Map<String, List<String>> relationSchemaMap = new HashMap<>();
+    private String databaseDirectory;
+    Map<String, List<String>> schema = new HashMap<>();
 
     public static DatabaseCatalog getInstance(){
         if (instance == null)
@@ -15,15 +15,15 @@ public class DatabaseCatalog {
         return instance;
     }
 
-    public void init(String databaseDir) {
-        this.databaseDir = databaseDir;
-        String schema_path = this.databaseDir + File.separator + "schema.txt";
+    public void init(String databaseDirectory) {
+        this.databaseDirectory = databaseDirectory;
+        String schema_path = this.databaseDirectory + File.separator + "schema.txt";
         try {
             File f = new File(schema_path);
             Scanner scanner = new Scanner(f);
             while (scanner.hasNextLine()) {
-                ArrayList<String> line = new ArrayList<>(Arrays.asList(scanner.nextLine().split("\\s+")));
-                this.relationSchemaMap.put(line.get(0), line.subList(1, line.size()));
+                ArrayList<String> fileLine = new ArrayList<>(Arrays.asList(scanner.nextLine().split("\\s+")));
+                this.schema.put(fileLine.get(0), fileLine.subList(1, fileLine.size()));
             }
             scanner.close();
         } catch (FileNotFoundException e) {
@@ -33,10 +33,10 @@ public class DatabaseCatalog {
     }
 
     public String getRelationPath(String relationName) {
-        return (this.databaseDir + File.separator + "files" + File.separator + relationName + ".csv");
+        return (this.databaseDirectory + File.separator + "files" + File.separator + relationName + ".csv");
     }
 
     public List<String> getSchema(String relationName) {
-        return relationSchemaMap.get(relationName);
+        return schema.get(relationName);
     }
 }

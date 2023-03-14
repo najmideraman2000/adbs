@@ -13,7 +13,6 @@ import java.util.List;
  *
  */
 public class Minibase {
-
     public static void main(String[] args) {
 
         if (args.length != 3) {
@@ -45,127 +44,128 @@ public class Minibase {
     private static Operator buildQueryPlan(Query query) {
         List<RelationalAtom> relationalBody = new ArrayList<>();
         List<ComparisonAtom> comparisonBody = new ArrayList<>();
-        List<Term> headVars = new ArrayList<>(query.getHead().getVariables());
-        RelationalAtom headReal = new RelationalAtom(query.getHead().getName(), headVars);
+        List<Term> headTerms = new ArrayList<>(query.getHead().getVariables());
+        RelationalAtom headRel = new RelationalAtom(query.getHead().getName(), headTerms);
 
         List<String> allVar = new ArrayList<>();
         for (Atom atom : query.getBody()) {
-            if (atom instanceof RelationalAtom) {
-                for (Term term : ((RelationalAtom) atom).getTerms()) {
-                    if (term instanceof Variable && !allVar.contains(((Variable) term).getName())) {
-                        allVar.add(((Variable) term).getName());
-                    }
+            if (!(atom instanceof RelationalAtom)) continue;
+            for (Term term : ((RelationalAtom) atom).getTerms()) {
+                if (term instanceof Variable && !allVar.contains(((Variable) term).getName())) {
+                    allVar.add(((Variable) term).getName());
                 }
             }
         }
 
         for (Atom atom : query.getBody()) {
             if (atom instanceof RelationalAtom) {
-                List<Term> termList = ((RelationalAtom) atom).getTerms();
+                List<Term> terms = ((RelationalAtom) atom).getTerms();
                 String relationName = ((RelationalAtom) atom).getName();
-                for (int i = 0; i < termList.size(); i++) {
-                    Term originalTerm = termList.get(i);
-                    if (originalTerm instanceof Constant) {
-                        String newVarName = generateNewVariableName(allVar);
-                        termList.set(i, new Variable(newVarName));
-                        comparisonBody.add(new ComparisonAtom(
-                                new Variable(newVarName),
-                                originalTerm,
-                                ComparisonOperator.fromString("=")
-                        ));
-                    }
+                for (int i = 0; i < terms.size(); i++) {
+                    Term term = terms.get(i);
+                    if (!(term instanceof Constant)) continue;
+                    String newVarName = generateNewVariable(allVar);
+                    terms.set(i, new Variable(newVarName));
+                    comparisonBody.add(new ComparisonAtom(
+                            new Variable(newVarName),
+                            term,
+                            ComparisonOperator.fromString("=")
+                    ));
                 }
-                relationalBody.add(new RelationalAtom(relationName, termList));
+                relationalBody.add(new RelationalAtom(relationName, terms));
             } else {
                 comparisonBody.add((ComparisonAtom)atom);
             }
         }
 
         Operator rootOperator = null;
-        List<String> previousVariables = new ArrayList<>();
-        for (RelationalAtom atom : relationalBody) {
-            List<String> subtreeVariables = new ArrayList<>();
-            for (Term term : atom.getTerms()) {
-                if (term instanceof Variable) subtreeVariables.add(((Variable) term).getName());
+        List<String> prevMergedVars = new ArrayList<>();
+        for (RelationalAtom relAtom : relationalBody) {
+            List<String> subtreeVars = new ArrayList<>();
+            for (Term term : relAtom.getTerms()) {
+                if (!(term instanceof Variable)) continue;
+                subtreeVars.add(((Variable) term).getName());
             }
 
             // Scan operation
-            Operator subtree = new ScanOperator(atom);
+            Operator subtree = new ScanOperator(relAtom);
 
             // Select operation
-            List<ComparisonAtom> selectCompAtomList = new ArrayList<>();
-            for (ComparisonAtom cAtom : comparisonBody)
-                if (variableAllAppeared(cAtom, subtreeVariables))
-                    selectCompAtomList.add(cAtom);
-            subtree = new SelectOperator(subtree, selectCompAtomList);
+            List<ComparisonAtom> selectComparisonsInvolved = new ArrayList<>();
+            for (ComparisonAtom compAtom : comparisonBody)
+                if (checkComparisonInvolved(compAtom, subtreeVars))
+                    selectComparisonsInvolved.add(compAtom);
+            subtree = new SelectOperator(subtree, selectComparisonsInvolved);
 
             // Join operation
-            List<String> mergedVariables = new ArrayList<>();
-            mergedVariables.addAll(previousVariables);
-            mergedVariables.addAll(subtreeVariables);
+            List<String> mergedTreeVars = new ArrayList<>();
+            mergedTreeVars.addAll(prevMergedVars);
+            mergedTreeVars.addAll(subtreeVars);
             if (rootOperator == null) {
                 rootOperator = subtree;
             } else {
-                List<ComparisonAtom> joinCompAtomList = new ArrayList<>();
-                for (ComparisonAtom cAtom : comparisonBody) {
-                    if (!variableAllAppeared(cAtom, previousVariables) &&
-                            !variableAllAppeared(cAtom, subtreeVariables) &&
-                            variableAllAppeared(cAtom, mergedVariables))
-                        joinCompAtomList.add(cAtom);
+                List<ComparisonAtom> joinComparisonsInvolved = new ArrayList<>();
+                for (ComparisonAtom compAtom : comparisonBody) {
+                    if (!checkComparisonInvolved(compAtom, prevMergedVars)
+                            && !checkComparisonInvolved(compAtom, subtreeVars)
+                            && checkComparisonInvolved(compAtom, mergedTreeVars))
+                    {
+                        joinComparisonsInvolved.add(compAtom);
+                    }
                 }
-                rootOperator = new JoinOperator(rootOperator, subtree, joinCompAtomList);
+                rootOperator = new JoinOperator(rootOperator, subtree, joinComparisonsInvolved);
             }
-            previousVariables = mergedVariables;
+            prevMergedVars = mergedTreeVars;
         }
         // Project operation
-        rootOperator = new ProjectOperator(rootOperator, headReal);
+        assert rootOperator != null;
+        rootOperator = new ProjectOperator(rootOperator, headRel);
 
         return rootOperator;
     }
 
-    private static String generateNewVariableName(List<String> usedNames) {
+    private static String generateNewVariable(List<String> unavailableVars) {
         int count = 0;
-        String newVar = "var" + String.valueOf(count);
-        while (usedNames.contains(newVar)) {
+        String newVar = "var" + count;
+        while (unavailableVars.contains(newVar)) {
             count++;
-            newVar = "var" + String.valueOf(count);
+            newVar = "var" + count;
         }
-        usedNames.add(newVar);
+        unavailableVars.add(newVar);
         return newVar;
     }
 
-    private static boolean variableAllAppeared(ComparisonAtom comparisonAtom, List<String> currentVariables) {
+    private static boolean checkComparisonInvolved(ComparisonAtom comparisonAtom, List<String> currentVariables) {
         if (comparisonAtom.getTerm1() instanceof Variable)
             if (!currentVariables.contains(((Variable) comparisonAtom.getTerm1()).getName()))
                 return false;
         if (comparisonAtom.getTerm2() instanceof Variable)
-            if (!currentVariables.contains(((Variable) comparisonAtom.getTerm2()).getName()))
-                return false;
+            return currentVariables.contains(((Variable) comparisonAtom.getTerm2()).getName());
         return true;
     }
 
-    /**
-     * Example method for getting started with the parser.
-     * Reads CQ from a file and prints it to screen, then extracts Head and Body
-     * from the query and prints them to screen.
-     */
-
-    public static void parsingExample(String filename) {
-        try {
-            Query query = QueryParser.parse(Paths.get(filename));
-            // Query query = QueryParser.parse("Q(x, y) :- R(x, z), S(y, z, w), z < w");
-            // Query query = QueryParser.parse("Q(SUM(x * 2 * x)) :- R(x, 'z'), S(4, z, w), 4 < 'test string' ");
-
-            System.out.println("Entire query: " + query);
-            Head head = query.getHead();
-            System.out.println("Head: " + head);
-            List<Atom> body = query.getBody();
-            System.out.println("Body: " + body);
-        }
-        catch (Exception e)
-        {
-            System.err.println("Exception occurred during parsing");
-            e.printStackTrace();
-        }
-    }
+//    /**
+//     * Example method for getting started with the parser.
+//     * Reads CQ from a file and prints it to screen, then extracts Head and Body
+//     * from the query and prints them to screen.
+//     */
+//
+//    public static void parsingExample(String filename) {
+//        try {
+//            Query query = QueryParser.parse(Paths.get(filename));
+//            // Query query = QueryParser.parse("Q(x, y) :- R(x, z), S(y, z, w), z < w");
+//            // Query query = QueryParser.parse("Q(SUM(x * 2 * x)) :- R(x, 'z'), S(4, z, w), 4 < 'test string' ");
+//
+//            System.out.println("Entire query: " + query);
+//            Head head = query.getHead();
+//            System.out.println("Head: " + head);
+//            List<Atom> body = query.getBody();
+//            System.out.println("Body: " + body);
+//        }
+//        catch (Exception e)
+//        {
+//            System.err.println("Exception occurred during parsing");
+//            e.printStackTrace();
+//        }
+//    }
 }

@@ -7,34 +7,32 @@ import java.util.HashMap;
 import java.util.List;
 
 public class JoinOperator extends Operator {
-    private final Operator leftChild;
-    private final Operator rightChild;
+    private final Operator leftChildOperator;
+    private final Operator rightChildOperator;
     private final HashMap<Integer, Integer> joinConditionIndices = new HashMap<>();
-    private final List<Integer> rightDuplicateColumns = new ArrayList<>();
+    private final List<Integer> duplicateColumns = new ArrayList<>();
     private Tuple leftTuple = null;
     private final List<ComparisonAtom> comparisonAtomList;
-    private final List<String> leftVariableMask;
-    private final List<String> rightVariableMask;
+    private final List<String> leftVarsName;
+    private final List<String> rightVarsName;
 
-    public JoinOperator(Operator leftChild, Operator rightChild, List<ComparisonAtom> comparisonAtoms) {
-        this.leftChild = leftChild;
-        leftVariableMask = leftChild.getVariableMask();
-        this.rightChild = rightChild;
-        rightVariableMask = rightChild.getVariableMask();
-        for (String leftVar : leftVariableMask) {
-            this.variableMask.add(leftVar);
-            if (rightVariableMask.contains(leftVar)) {
-                // construct new join conditions for these identical variable pairs
-                this.joinConditionIndices.put(leftVariableMask.indexOf(leftVar), rightVariableMask.indexOf(leftVar));
-                this.rightDuplicateColumns.add(rightVariableMask.indexOf(leftVar));
+    public JoinOperator(Operator leftChildOperator, Operator rightChildOperator, List<ComparisonAtom> comparisonAtoms) {
+        this.leftChildOperator = leftChildOperator;
+        leftVarsName = leftChildOperator.getVarsName();
+        this.rightChildOperator = rightChildOperator;
+        rightVarsName = rightChildOperator.getVarsName();
+        for (String leftVar : leftVarsName) {
+            this.varsName.add(leftVar);
+            if (rightVarsName.contains(leftVar)) {
+                this.joinConditionIndices.put(leftVarsName.indexOf(leftVar), rightVarsName.indexOf(leftVar));
+                this.duplicateColumns.add(rightVarsName.indexOf(leftVar));
             }
         }
-        for (String rightVar : rightVariableMask) {
+        for (String rightVar : rightVarsName) {
             if (rightVar == null) {
-                this.variableMask.add(null);
+                this.varsName.add(null);
             } else {
-                if (!this.variableMask.contains(rightVar))
-                    this.variableMask.add(rightVar);
+                if (!this.varsName.contains(rightVar)) this.varsName.add(rightVar);
             }
         }
         this.comparisonAtomList = comparisonAtoms;
@@ -42,108 +40,105 @@ public class JoinOperator extends Operator {
 
     @Override
     public void reset() {
-        this.leftChild.reset();
-        this.rightChild.reset();
+        this.leftChildOperator.reset();
+        this.rightChildOperator.reset();
         this.leftTuple = null;
     }
 
     @Override
     public Tuple getNextTuple() {
         if (this.leftTuple == null)
-            this.leftTuple = this.leftChild.getNextTuple();
+            this.leftTuple = this.leftChildOperator.getNextTuple();
 
         while (this.leftTuple != null) {
-            Tuple rightTuple = this.rightChild.getNextTuple();
+            Tuple rightTuple = this.rightChildOperator.getNextTuple();
 
             while (rightTuple != null) {
-                boolean pass = true;
+                boolean valid = true;
                 for (Integer leftIndex : this.joinConditionIndices.keySet()) {
                     int rightIndex = this.joinConditionIndices.get(leftIndex);
                     if (!this.leftTuple.getTerms().get(leftIndex).equals(rightTuple.getTerms().get(rightIndex))) {
-                        pass = false;
+                        valid = false;
                         break;
                     }
                 }
-                if (pass) {
-                    if (!check(this.leftTuple, rightTuple)) {
-                        pass = false;
+                if (valid) {
+                    if (!valid(this.leftTuple, rightTuple)) {
+                        valid = false;
                     }
                 }
-                if (pass) {
-                    List<Term> joinTermList = new ArrayList<>();
-                    // the join result contains all columns in left tuple, and the non-duplicate columns in right tuple
-                    for (Term leftTerm : this.leftTuple.getTerms())
-                        joinTermList.add(leftTerm);
+                if (valid) {
+                    List<Term> joinTerms = new ArrayList<>(this.leftTuple.getTerms());
                     for (int i = 0; i < rightTuple.getTerms().size(); i++) {
-                        if (!this.rightDuplicateColumns.contains(i)) {
-                            joinTermList.add(rightTuple.getTerms().get(i));
+                        if (!this.duplicateColumns.contains(i)) {
+                            joinTerms.add(rightTuple.getTerms().get(i));
                         }
                     }
-                    return new Tuple("Join", joinTermList);
+                    return new Tuple("Join", joinTerms);
                 }
-                rightTuple = this.rightChild.getNextTuple();
+                rightTuple = this.rightChildOperator.getNextTuple();
             }
-            this.rightChild.reset();
-            this.leftTuple = this.leftChild.getNextTuple();
+            this.rightChildOperator.reset();
+            this.leftTuple = this.leftChildOperator.getNextTuple();
         }
         return null;
     }
 
-    public boolean check(Tuple leftTuple, Tuple rightTuple) {
-        for (ComparisonAtom cAtom : this.comparisonAtomList) {
-            String op = cAtom.getOp().toString();
-            int operand1Idx = 0;
-            int operand2Idx = 0;
-            boolean reverseOrder = false;
-            if ( leftVariableMask.contains(((Variable) cAtom.getTerm1()).getName()) ) {
-                operand1Idx = leftVariableMask.indexOf(((Variable) cAtom.getTerm1()).getName());
-                operand2Idx = rightVariableMask.indexOf(((Variable) cAtom.getTerm2()).getName());
+    public boolean valid(Tuple leftTuple, Tuple rightTuple) {
+        for (ComparisonAtom compAtom : this.comparisonAtomList) {
+            String op = compAtom.getOp().toString();
+            int operand1Index;
+            int operand2Index;
+            boolean reverse = false;
+            if ( leftVarsName.contains(((Variable) compAtom.getTerm1()).getName()) ) {
+                operand1Index = leftVarsName.indexOf(((Variable) compAtom.getTerm1()).getName());
+                operand2Index = rightVarsName.indexOf(((Variable) compAtom.getTerm2()).getName());
             } else {
-                reverseOrder = true;
-                operand1Idx = rightVariableMask.indexOf(((Variable) cAtom.getTerm1()).getName());
-                operand2Idx = leftVariableMask.indexOf(((Variable) cAtom.getTerm2()).getName());
+                reverse = true;
+                operand1Index = rightVarsName.indexOf(((Variable) compAtom.getTerm1()).getName());
+                operand2Index = leftVarsName.indexOf(((Variable) compAtom.getTerm2()).getName());
             }
 
             Term operand1;
             Term operand2;
-            if (!reverseOrder) {
-                operand1 = leftTuple.getTerms().get(operand1Idx);
-                operand2 = rightTuple.getTerms().get(operand2Idx);
+            if (!reverse) {
+                operand1 = leftTuple.getTerms().get(operand1Index);
+                operand2 = rightTuple.getTerms().get(operand2Index);
             } else {
-                operand1 = rightTuple.getTerms().get(operand1Idx);
-                operand2 = leftTuple.getTerms().get(operand2Idx);
+                operand1 = rightTuple.getTerms().get(operand1Index);
+                operand2 = leftTuple.getTerms().get(operand2Index);
             }
 
-            boolean pass;
+            boolean valid;
+            boolean equals = operand1.toString().equals(operand2.toString());
             switch (op) {
                 case "=":
-                    pass = operand1.toString().equals(operand2.toString());
+                    valid = equals;
                     break;
                 case "!=":
-                    pass = !operand1.toString().equals(operand2.toString());
+                    valid = !equals;
                     break;
                 case ">":
-                    if (operand1 instanceof IntegerConstant) pass = ((IntegerConstant) operand1).getValue() > ((IntegerConstant) operand2).getValue();
-                    else pass = ((StringConstant) operand1).getValue().compareTo(((StringConstant) operand2).getValue()) > 0;
+                    if (operand1 instanceof IntegerConstant) valid = ((IntegerConstant) operand1).getValue() > ((IntegerConstant) operand2).getValue();
+                    else valid = ((StringConstant) operand1).getValue().compareTo(((StringConstant) operand2).getValue()) > 0;
                     break;
                 case ">=":
-                    if (operand1 instanceof IntegerConstant) pass = ((IntegerConstant) operand1).getValue() >= ((IntegerConstant) operand2).getValue();
-                    else pass = ((StringConstant) operand1).getValue().compareTo(((StringConstant) operand2).getValue()) >= 0;
+                    if (operand1 instanceof IntegerConstant) valid = ((IntegerConstant) operand1).getValue() >= ((IntegerConstant) operand2).getValue();
+                    else valid = ((StringConstant) operand1).getValue().compareTo(((StringConstant) operand2).getValue()) >= 0;
                     break;
                 case "<":
-                    if (operand1 instanceof IntegerConstant) pass = ((IntegerConstant) operand1).getValue() < ((IntegerConstant) operand2).getValue();
-                    else pass = ((StringConstant) operand1).getValue().compareTo(((StringConstant) operand2).getValue()) < 0;
+                    if (operand1 instanceof IntegerConstant) valid = ((IntegerConstant) operand1).getValue() < ((IntegerConstant) operand2).getValue();
+                    else valid = ((StringConstant) operand1).getValue().compareTo(((StringConstant) operand2).getValue()) < 0;
                     break;
                 case "<=":
-                    if (operand1 instanceof IntegerConstant) pass = ((IntegerConstant) operand1).getValue() <= ((IntegerConstant) operand2).getValue();
-                    else pass = ((StringConstant) operand1).getValue().compareTo(((StringConstant) operand2).getValue()) <= 0;
+                    if (operand1 instanceof IntegerConstant) valid = ((IntegerConstant) operand1).getValue() <= ((IntegerConstant) operand2).getValue();
+                    else valid = ((StringConstant) operand1).getValue().compareTo(((StringConstant) operand2).getValue()) <= 0;
                     break;
                 default:
-                    System.out.println("!!!! None of the if-branches is evoked in the Selection Operator !!!!");
-                    pass = false;
+                    valid = false;
                     break;
             }
-            if (!pass) return false;
+            if (!valid) return false;
         }
         return true;
     }

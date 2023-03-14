@@ -6,43 +6,43 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class ProjectOperator extends Operator {
-    private Operator child;
-    private String projectionName;
-    private List<Integer> projectIndices = new ArrayList<>();
-    private List<String> reportBuffer = new ArrayList<>();
+    private final Operator childOperator;
+    private final String projectionName;
+    private final List<Integer> projectIndices = new ArrayList<>();
+    private List<String> buffer = new ArrayList<>();
 
     public ProjectOperator(Operator childOperator, RelationalAtom queryHead) {
-        this.child = childOperator;
-        List<String> childVariableMask = childOperator.getVariableMask(); // the variableMask before projection
+        this.childOperator = childOperator;
+        List<String> childVariableMask = childOperator.getVarsName(); // the variableMask before projection
         this.projectionName = queryHead.getName();
         for (int i = 0; i < queryHead.getTerms().size(); i++) {
             String varName = ((Variable) queryHead.getTerms().get(i)).getName();
             int idx = childVariableMask.indexOf(varName);
             this.projectIndices.add(idx);
-            this.variableMask.add(varName);
+            this.varsName.add(varName);
         }
     }
 
     @Override
     public void reset() {
-        this.child.reset();
-        this.reportBuffer = new ArrayList<>();
+        this.childOperator.reset();
+        this.buffer = new ArrayList<>();
     }
 
     @Override
     public Tuple getNextTuple() {
-        Tuple childOutput = this.child.getNextTuple();
-        while (childOutput != null) {
-            List<Term> termList = new ArrayList<>();
-            for (int pi : this.projectIndices) {
-                termList.add(childOutput.getTerms().get(pi));
+        Tuple nextTuple = this.childOperator.getNextTuple();
+        while (nextTuple != null) {
+            List<Term> terms = new ArrayList<>();
+            for (int index : this.projectIndices) {
+                terms.add(nextTuple.getTerms().get(index));
             }
-            Tuple newTuple = new Tuple(this.projectionName, termList);
-            if (!this.reportBuffer.contains(newTuple.toString())) {
-                this.reportBuffer.add(newTuple.toString());
+            Tuple newTuple = new Tuple(this.projectionName, terms);
+            if (!this.buffer.contains(newTuple.toString())) {
+                this.buffer.add(newTuple.toString());
                 return newTuple;
             }
-            childOutput = this.child.getNextTuple();
+            nextTuple = this.childOperator.getNextTuple();
         }
         return null;
     }

@@ -5,12 +5,9 @@ import ed.inf.adbs.minibase.base.Term;
 
 import java.util.List;
 
-/**
- * A class for storing a row/record from a relation in database.
- */
 public class Tuple {
-    private String relationName;
-    private List<Term> terms;
+    private final String relationName;
+    private final List<Term> terms;
 
     public Tuple(String relationName, List<Term> terms) {
         this.relationName = relationName;
@@ -25,10 +22,6 @@ public class Tuple {
         return terms;
     }
 
-    /**
-     * Convert the tuple instance into print style
-     * @return a String represent this tuple, columns split by ', '
-     */
     @Override
     public String toString() {
         return Utils.join(terms, ", ");
