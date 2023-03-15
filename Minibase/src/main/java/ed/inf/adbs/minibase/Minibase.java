@@ -45,6 +45,9 @@ public class Minibase {
         List<RelationalAtom> relationalBody = new ArrayList<>();
         List<ComparisonAtom> comparisonBody = new ArrayList<>();
         List<Term> headTerms = new ArrayList<>(query.getHead().getVariables());
+        if (query.getHead().getSumAggregate() != null) {
+            headTerms.add(query.getHead().getSumAggregate());
+        }
         RelationalAtom headRel = new RelationalAtom(query.getHead().getName(), headTerms);
 
         List<String> allVar = new ArrayList<>();
@@ -118,8 +121,14 @@ public class Minibase {
             prevMergedVars = mergedTreeVars;
         }
         // Project operation
+//        System.out.println(query.getHead().getSumAggregate());
         assert rootOperator != null;
-        rootOperator = new ProjectOperator(rootOperator, headRel);
+        if (query.getHead().getSumAggregate() != null) {
+            rootOperator = new SumOperator(rootOperator, headRel);
+        }
+        else {
+            rootOperator = new ProjectOperator(rootOperator, headRel);
+        }
 
         return rootOperator;
     }

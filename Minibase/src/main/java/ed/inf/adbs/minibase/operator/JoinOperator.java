@@ -57,7 +57,7 @@ public class JoinOperator extends Operator {
                 boolean valid = true;
                 for (Integer leftIndex : this.joinConditionIndices.keySet()) {
                     int rightIndex = this.joinConditionIndices.get(leftIndex);
-                    if (!this.leftTuple.getTerms().get(leftIndex).equals(rightTuple.getTerms().get(rightIndex))) {
+                    if (!this.leftTuple.getTerms().get(leftIndex).toString().equals(rightTuple.getTerms().get(rightIndex).toString())) {
                         valid = false;
                         break;
                     }
