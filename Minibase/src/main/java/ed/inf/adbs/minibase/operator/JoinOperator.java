@@ -1,3 +1,8 @@
+/**
+ * The JoinOperator class represents the join operator that merges tuples from two child operators.
+ * It inherits the Operator class.
+ */
+
 package ed.inf.adbs.minibase.operator;
 
 import ed.inf.adbs.minibase.base.*;
@@ -16,18 +21,28 @@ public class JoinOperator extends Operator {
     private final List<String> leftVarsName;
     private final List<String> rightVarsName;
 
+    /**
+     * Constructs a JoinOperator object that performs a join on the tuples returned by the left and right child operators.
+     *
+     * @param leftChildOperator the left child operator
+     * @param rightChildOperator the right child operator
+     * @param comparisonAtoms the list of comparison atoms for the join condition
+     */
     public JoinOperator(Operator leftChildOperator, Operator rightChildOperator, List<ComparisonAtom> comparisonAtoms) {
         this.leftChildOperator = leftChildOperator;
         leftVarsName = leftChildOperator.getVarsName();
         this.rightChildOperator = rightChildOperator;
         rightVarsName = rightChildOperator.getVarsName();
+        // Add variables from left child operator to varsName
         for (String leftVar : leftVarsName) {
             this.varsName.add(leftVar);
+            // Add join condition indices and duplicate columns
             if (rightVarsName.contains(leftVar)) {
                 this.joinConditionIndices.put(leftVarsName.indexOf(leftVar), rightVarsName.indexOf(leftVar));
                 this.duplicateColumns.add(rightVarsName.indexOf(leftVar));
             }
         }
+        // Add variables from right child operator to varsName
         for (String rightVar : rightVarsName) {
             if (rightVar == null) {
                 this.varsName.add(null);
@@ -38,6 +53,9 @@ public class JoinOperator extends Operator {
         this.comparisonAtomList = comparisonAtoms;
     }
 
+    /**
+     * Resets the state of the JoinOperator by resetting the left and right child operators and setting leftTuple to null.
+     */
     @Override
     public void reset() {
         this.leftChildOperator.reset();
@@ -45,6 +63,11 @@ public class JoinOperator extends Operator {
         this.leftTuple = null;
     }
 
+    /**
+     * Returns the next tuple produced by the JoinOperator by joining tuples from the left and right child operators.
+     *
+     * @return the next tuple produced by the JoinOperator
+     */
     @Override
     public Tuple getNextTuple() {
         if (this.leftTuple == null)
@@ -62,11 +85,13 @@ public class JoinOperator extends Operator {
                         break;
                     }
                 }
+                // Check join condition
                 if (valid) {
                     if (!valid(this.leftTuple, rightTuple)) {
                         valid = false;
                     }
                 }
+                // If tuple is valid, create a new tuple with joined terms
                 if (valid) {
                     List<Term> joinTerms = new ArrayList<>(this.leftTuple.getTerms());
                     for (int i = 0; i < rightTuple.getTerms().size(); i++) {
@@ -84,12 +109,22 @@ public class JoinOperator extends Operator {
         return null;
     }
 
+    /**
+     * Check if two tuples satisfy the comparison atoms in the list.
+     *
+     @param leftTuple the first tuple to be compared
+     @param rightTuple the second tuple to be compared
+     @return true if both tuples satisfy all comparison atoms, false otherwise
+     */
     public boolean valid(Tuple leftTuple, Tuple rightTuple) {
+        // Loop through all comparison atoms in the list
         for (ComparisonAtom compAtom : this.comparisonAtomList) {
+            // Get the operator from the comparison atom
             String op = compAtom.getOp().toString();
             int operand1Index;
             int operand2Index;
             boolean reverse = false;
+            // Determine which operand is from the left tuple and which is from the right tuple
             if ( leftVarsName.contains(((Variable) compAtom.getTerm1()).getName()) ) {
                 operand1Index = leftVarsName.indexOf(((Variable) compAtom.getTerm1()).getName());
                 operand2Index = rightVarsName.indexOf(((Variable) compAtom.getTerm2()).getName());
@@ -99,6 +134,7 @@ public class JoinOperator extends Operator {
                 operand2Index = leftVarsName.indexOf(((Variable) compAtom.getTerm2()).getName());
             }
 
+            // Get the operands for the current comparison atom based on which tuple they come from
             Term operand1;
             Term operand2;
             if (!reverse) {
@@ -109,6 +145,7 @@ public class JoinOperator extends Operator {
                 operand2 = leftTuple.getTerms().get(operand2Index);
             }
 
+            // Determine if the comparison is valid based on the operator
             boolean valid;
             boolean equals = operand1.toString().equals(operand2.toString());
             switch (op) {
@@ -138,6 +175,7 @@ public class JoinOperator extends Operator {
                     valid = false;
                     break;
             }
+            // If the comparison is not valid, return false immediately
             if (!valid) return false;
         }
         return true;

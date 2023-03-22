@@ -1,3 +1,7 @@
+/**
+ * ProjectOperator class represents the operator to perform projection on the child operator
+ */
+
 package ed.inf.adbs.minibase.operator;
 
 import ed.inf.adbs.minibase.base.*;
@@ -11,6 +15,12 @@ public class ProjectOperator extends Operator {
     private final List<Integer> projectIndices = new ArrayList<>();
     private List<String> buffer = new ArrayList<>();
 
+    /**
+     * Creates a new ProjectOperator instance.
+     *
+     * @param childOperator the child operator to be projected
+     * @param queryHead the relational atom representing the projection
+     */
     public ProjectOperator(Operator childOperator, RelationalAtom queryHead) {
         this.childOperator = childOperator;
         List<String> childVariableMask = childOperator.getVarsName(); // the variableMask before projection
@@ -23,12 +33,20 @@ public class ProjectOperator extends Operator {
         }
     }
 
+    /**
+     * Resets the operator to its initial state.
+     */
     @Override
     public void reset() {
         this.childOperator.reset();
         this.buffer = new ArrayList<>();
     }
 
+    /**
+     * Returns the next projected tuple.
+     *
+     * @return the next projected tuple or null if there is no more tuple to project
+     */
     @Override
     public Tuple getNextTuple() {
         Tuple nextTuple = this.childOperator.getNextTuple();

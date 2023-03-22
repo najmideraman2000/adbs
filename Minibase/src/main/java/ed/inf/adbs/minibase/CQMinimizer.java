@@ -73,15 +73,13 @@ public class CQMinimizer {
 
             File file = new File(outputFile);
             //creat output file
-            if(!file.getParentFile().exists()) {
-                file.getParentFile().mkdirs();
-            }
+//            if(!file.getParentFile().exists()) {
+//                file.getParentFile().mkdirs();
+//            }
             FileWriter fileWriter;
             try {
                 fileWriter = new FileWriter(file);
-                StringBuilder line = new StringBuilder();
-                line.append(head+" :- "+bodyRel.toString().substring(1,bodyRel.toString().length()-1));
-                fileWriter.write(line.toString());
+                fileWriter.write(head + " :- " + bodyRel.toString().substring(1, bodyRel.toString().length() - 1));
                 fileWriter.close();
                 System.out.println("Succesful Minimization");
             } catch (IOException e) {
@@ -96,19 +94,28 @@ public class CQMinimizer {
         }
     }
 
+    /**
+     * Determines if there exists a homomorphism between the atom at removeIndex and any other atom in body.
+     *
+     * @param removeIndex index of atom to remove from body
+     * @param body list of relational atoms to search for homomorphism
+     * @param headTerms list of strings representing the terms in the head of the rule
+     * @return true if there exists a homomorphism, false otherwise
+     */
     public static boolean has_homomorphism(int removeIndex, List<RelationalAtom> body, List<String> headTerms) {
-//        for (Term term : headTerms) {
-//            System.out.println(term);
-//        }
+        // Get atom to remove
         RelationalAtom atomToRemove = body.get(removeIndex);
+        // Search for homomorphism between atomToRemove and other atoms in body
         for (int i = 0; i < body.size(); i++) {
             RelationalAtom atomTarget = body.get(i);
 
             if (i == removeIndex) continue;
+            // Skip if comparing to same atom or if atom names don't match
             if (!Objects.equals(atomTarget.getName(), atomToRemove.getName())) continue;
 
             boolean canBeMapped = true;
 
+            // Check if terms can be mapped
             for (int j = 0; j < atomToRemove.getTerms().size(); j++) {
                 Term curTerm = atomToRemove.getTerms().get(j);
                 Term targetTerm = atomTarget.getTerms().get(j);
@@ -119,6 +126,7 @@ public class CQMinimizer {
                 }
             }
             if (canBeMapped) {
+                // Create mappings for terms
                 HashMap<Term, Term> mappings = new HashMap<>();
                 for (int j = 0; j < atomToRemove.getTerms().size(); j++) {
                     Term cur_term = atomToRemove.getTerms().get(j);
@@ -127,6 +135,7 @@ public class CQMinimizer {
                         mappings.put(cur_term,mapped_term);
                     }
                 }
+                // Apply mappings to body and check if they are valid
                 List<RelationalAtom> mappedBody = mapping(body, mappings);
                 if (checkMappings(body, mappedBody, headTerms)) {
                     return true;
@@ -136,8 +145,17 @@ public class CQMinimizer {
         return false;
     }
 
+    /**
+     * Creates a new list of relational atoms where the terms in the original atoms are replaced
+     * with their corresponding mappings from the given HashMap.
+     *
+     * @param body list of relational atoms to apply mappings to
+     * @param mappings HashMap of Term mappings to apply to the atoms
+     * @return a new list of relational atoms with the mapped terms
+     */
     public static List<RelationalAtom> mapping(List<RelationalAtom> body, HashMap<Term, Term> mappings) {
         List<RelationalAtom> mappedBody = new ArrayList<>();
+        // Apply mappings to each atom in the body
         for (RelationalAtom relationalAtom : body) {
             List<Term> mappedTerms = new ArrayList<>();
             for (int j = 0; j < relationalAtom.getTerms().size(); j++) {
@@ -154,8 +172,18 @@ public class CQMinimizer {
         return mappedBody;
     }
 
+    /**
+     * Checks if the given mappings are a valid homomorphism by verifying that all atoms in mappedBody can be
+     * mapped to atoms in the original body while preserving the relationship between their terms.
+     *
+     * @param body original list of relational atoms
+     * @param mappedBody list of relational atoms with terms that have been mapped according to the given mappings
+     * @param headTerms list of terms in the head of the rule
+     * @return true if the given mappings are a valid homomorphism, false otherwise
+     */
     public static boolean checkMappings(List<RelationalAtom> body, List<RelationalAtom> mappedBody, List<String> headTerms) {
         int atomTotal = 0;
+        // Check each mapped atom to see if it can be mapped to an atom in the original body
         for (RelationalAtom mappedAtom : mappedBody) {
             for (RelationalAtom bodyAtom : body) {
                 if (Objects.equals(mappedAtom.getName(), bodyAtom.getName()) && mappedAtom.getTerms().size() == bodyAtom.getTerms().size()) {
@@ -176,14 +204,7 @@ public class CQMinimizer {
                 }
             }
         }
-        System.out.println(atomTotal);
-        System.out.println(body.size());
-        if (atomTotal == body.size()) {
-            System.out.println("YESSSS");
-            return true;
-        }
-
-        return false;
+        return atomTotal == body.size();
     }
 
     /**

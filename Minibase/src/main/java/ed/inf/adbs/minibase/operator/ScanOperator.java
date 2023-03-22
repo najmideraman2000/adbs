@@ -1,3 +1,6 @@
+/**
+ * This class represents a Scan Operator that reads data from a relation and returns the tuples.
+ */
 package ed.inf.adbs.minibase.operator;
 
 import ed.inf.adbs.minibase.base.*;
@@ -13,6 +16,11 @@ public class ScanOperator extends Operator{
     private Scanner scanner;
     private final List<String> schema;
 
+    /**
+     * Constructs a new ScanOperator object for the given RelationalAtom.
+     *
+     * @param atom the RelationalAtom to scan.
+     */
     public ScanOperator(RelationalAtom atom) {
         for (Term term : atom.getTerms()) {
             if (term instanceof Variable) this.varsName.add(((Variable) term).getName());
@@ -24,6 +32,9 @@ public class ScanOperator extends Operator{
         this.reset();
     }
 
+    /**
+     * Resets the operator to the beginning of the relation.
+     */
     @Override
     public void reset() {
         DatabaseCatalog dbCat = DatabaseCatalog.getInstance();
@@ -35,6 +46,11 @@ public class ScanOperator extends Operator{
         }
     }
 
+    /**
+     * Returns the next tuple in the relation, or null if there are no more tuples.
+     *
+     * @return the next tuple in the relation, or null if there are no more tuples.
+     */
     @Override
     public Tuple getNextTuple() {
         if (this.scanner.hasNextLine()) {

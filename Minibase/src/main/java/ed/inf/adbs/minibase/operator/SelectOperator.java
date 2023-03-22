@@ -8,17 +8,31 @@ public class SelectOperator extends Operator {
     private final Operator childOperator;
     private final List<ComparisonAtom> comparisonAtomList;
 
+    /**
+     * Constructs a new SelectOperator object with a child operator and a list of comparison atoms.
+     *
+     * @param childOperator The child operator.
+     * @param compAtomList  The list of comparison atoms.
+     */
     public SelectOperator(Operator childOperator, List<ComparisonAtom> compAtomList) {
         this.childOperator = childOperator;
         this.varsName = this.childOperator.getVarsName();
         this.comparisonAtomList = compAtomList;
     }
 
+    /**
+     * Resets the child operator.
+     */
     @Override
     public void reset() {
         this.childOperator.reset();
     }
 
+    /**
+     * Returns the next tuple that satisfies the comparison atoms.
+     *
+     * @return The next tuple that satisfies the comparison atoms, or null if no such tuple exists.
+     */
     @Override
     public Tuple getNextTuple() {
         Tuple nextTuple = this.childOperator.getNextTuple();
@@ -29,6 +43,12 @@ public class SelectOperator extends Operator {
         return null;
     }
 
+    /**
+     * Returns whether a tuple satisfies all the comparison atoms.
+     *
+     * @param tuple The tuple to be checked.
+     * @return True if the tuple satisfies all the comparison atoms, false otherwise.
+     */
     public boolean valid(Tuple tuple) {
         for (ComparisonAtom compAtom : this.comparisonAtomList) {
             String operation = compAtom.getOp().toString();
